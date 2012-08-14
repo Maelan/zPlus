@@ -1,0 +1,240 @@
+#include "zPlus_main.h"
+#include <SDL/SDL.h>
+#include <SDL/SDL_thread.h>
+#include <SDL/SDL_ttf.h>
+
+
+
+
+
+void  createThread
+  (Thread* th, ThreadProc proc, PlayerDatas* player, unsigned info)
+{
+	th->player = player;
+	th->com = info;
+	th->proc = proc;
+	th->mutex = SDL_CreateMutex();
+	th->cond = SDL_CreateCond();
+	th->th = SDL_CreateThread(proc, th);
+}
+
+
+
+void  waitThread
+  (Thread* th)
+{
+	SDL_WaitThread(th->th, NULL);
+	SDL_DestroyMutex(th->mutex);
+	SDL_DestroyCond(th->cond);
+}
+
+
+
+void  tellThread
+  (Thread* th, unsigned com)
+{
+	SDL_mutexP(th->mutex);
+	th->com = com;
+	SDL_mutexV(th->mutex);
+	SDL_CondSignal(th->cond);
+}
+
+
+
+unsigned  listenThread
+  (Thread* th)
+{
+	SDL_mutexP(th->mutex);
+	SDL_CondWait(th->cond, th->mutex);
+	SDL_mutexV(th->mutex);
+	return th->com;
+}
+
+
+
+
+
+/* Jeu. */
+
+int  thprocGuess
+  (void* datas)
+{
+	Thread* selfTh = datas;
+	unsigned max;
+	
+	max = selfTh->com;
+
+	return 42;
+}
+
+
+
+int  thprocAnswer
+  (void* datas)
+{
+	Thread* selfTh = datas;
+	unsigned diff;
+	unsigned ans, try;
+	unsigned tries;
+	clock_t chrono;
+	
+	ans = selfTh->com;
+	
+	tries = 0;
+	chrono = clock();
+	do {
+		tries++;
+		try = listenThread(selfTh);
+		wprintf(
+		  L" -> %u : c'est %ls.\n",
+		  try,
+		  (try < ans)
+			? L"plus"
+			: (try > ans)
+			  ? L"moins"
+			  : L"ça"
+		 );
+	} while(try != ans);
+	chrono = clock() - chrono;
+	
+	wprintf(
+	  L"La réponse était %u.\n"
+	  L"Vous avez trouvé en %u coups et %.2fs"
+	  L" (soit une moyenne de %.2fs par coup).\n"
+	  L"Vous pouviez réussir en %u coup au maximum.\n\n",
+	  ans,
+	  tries,
+	  (double)chrono / CLOCKS_PER_SEC,
+	  (double)chrono / CLOCKS_PER_SEC / tries,
+	  _log2(max) + 1
+	 );
+	
+	/* Enregistrement des résultats. */
+	selfTh->player->levels[0].played ++;
+	if(diff) {
+		selfTh->player->levels[diff].played     ++;
+		selfTh->player->levels[diff].totalTries += tries;
+		if( tries < selfTh->player->levels[diff].minTries
+			&& selfTh->player->levels[diff].minTries )
+			selfTh->player->levels[diff].minTries = tries;
+	}
+	
+	return 0x2A;
+}
+
+
+
+int  play
+  (unsigned mode, unsigned diff, PlayerDatas* playerG, PlayerDatas* playerA)
+{
+	Thread thGuess, thAnswer;
+	unsigned max, ans;
+	
+	max = ( diff == 0 )
+	  ? askNum(L"Maximum :")
+	  : _pow(10, diff);
+	
+	ans = ( mode == 2 )
+	  ? choose(0, max, L"Nombre mystère :")
+	  : alea(max);
+	
+	createThread(&thGuess, thprocGuess, playerG, max);
+	createThread(&thAnswer, thprocAnswer, playerA, ans);
+	if(!thGuess.th || ! thAnswer.th) {
+		fprintf(stderr, "Error when creating threads: %s.\n", SDL_GetError());
+		/* FIXME: terminer les threads créés. */
+		return 0;
+	}
+	
+	waitThread(&thGuess);
+	waitThread(&thAnswer);
+	
+	return 1;
+}
+
+
+
+
+
+/* Main. */
+
+int  main
+  (int ac, char** av)
+{
+	Datas* datas;
+	unsigned mode, diff;
+	
+	const Menu mainMenu = {
+		L"Menu principal :",
+		4, 1,
+		{ { L"Jouer.",          NULL, NULL      },
+		  { L"Statistiques.",   NULL, NULL      },
+		  { L"Joueurs.",        NULL, NULL      },
+		  { L"Quitter le jeu.", NULL, NULL } }
+	};
+	
+	const Menu modeMenu = {
+		L"Modes de jeu :",
+		4, 0,
+		{ { L"IA         (programme / programme)", NULL,      NULL },
+		  { L"solo       (programme / joueur)",    NULL,      NULL },
+		  { L"2 joueurs  (joueur    / joueur)",    NULL,      NULL },
+		  { L"Retour au menu principal.",          NULL/*&mainMenu*/, NULL } }
+	};
+	
+	const Menu diffMenu = {
+		L"Difficulté :",
+		5, 0,
+		{ { L"personnalisé                    (0 - n)",    NULL, NULL      },
+		  { L"facile                          (0 - 10)",   NULL, NULL      },
+		  { L"moyen                           (0 - 100)",  NULL, NULL },
+		  { L"difficile                       (0 - 1000)", NULL, NULL },
+		  { L"de plus en plus diabolique !  (0 - 10^n)",   NULL, NULL } }
+	};
+	
+	/* Initialisations absconses. */
+	srand(time(NULL));
+	setlocale(LC_ALL, "");
+	//setConsoleOutputEncoding(1);
+	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTTHREAD);
+	TTF_Init();
+	SDL_EnableUNICODE(1);
+	
+	/* Chargement du fichier de données. */
+	datas = loadDatas();
+	
+	while(027) {
+		/* Menu principal. */
+		mode = menu(&mainMenu);
+		if(mode == 4)
+			break;
+		
+		while(0x6142) {
+			/* Choix du mode de jeu. */
+			mode = menu(&modeMenu);
+			if(mode == 3)
+				break;
+			
+			/* Choix de la difficulté. */
+			diff = menu(&diffMenu);
+			
+			/* Jeu. */
+			PlayerDatas* playerG = ( mode == 2 )
+			  ? datas->players + datas->player2
+			  : NULL;
+			PlayerDatas* playerA = ( mode != 0 )
+			  ? datas->players + datas->player1
+			  : NULL;
+			
+			play(mode, diff, playerG, playerA);
+		}
+	}
+	
+	/* Fin du programme. */
+	//setConsoleOutputEncoding(0);
+	TTF_Quit();
+	SDL_Quit();
+	unloadDatas(datas);
+	
+	return EXIT_SUCCESS;
+}
