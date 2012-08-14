@@ -18,6 +18,15 @@
 
 
 
+typedef struct {
+	Datas* datas;
+	unsigned mode/*, diff*/;
+} Context;
+
+extern Context  gcontext;
+
+
+
 unsigned  askTry
   (PlayerDatas* player, unsigned min, unsigned max);
 

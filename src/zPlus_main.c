@@ -7,6 +7,10 @@
 
 
 
+Context  gcontext;
+
+
+
 unsigned  askTry
   (PlayerDatas* player, unsigned min, unsigned max)
 {
@@ -117,38 +121,55 @@ void  play
 
 /* Main. */
 
+
+
+void  playMenuProc
+  (unsigned diff)
+{
+	/* Joueur qui doit deviner (« Guesser »). */
+	PlayerDatas* playerG = ( gcontext.mode != 0 )
+	  ? gcontext.datas->players + gcontext.datas->player1
+	  : NULL;
+	/* Joueur qui détient la réponse (« Answerer »). */
+	PlayerDatas* playerA = ( gcontext.mode == 2 )
+	  ? gcontext.datas->players + gcontext.datas->player2
+	  : NULL;
+	
+	play(gcontext.mode, diff, playerG, playerA);
+}
+
+
+
 int  main
   (int ac, char** av)
 {
-	Datas* datas;
-	unsigned mode, diff;
-	
-	const Menu mainMenu = {
-		L"Menu principal :",
-		4, 1,
-		{ { 0, L"Jouer.",          NULL, NULL      },
-		  { 0, L"Statistiques.",   NULL, NULL      },
-		  { 0, L"Joueurs.",        NULL, NULL      },
-		  { 0, L"Quitter le jeu.", NULL, NULL } }
+	const Menu diffMenu = {
+		L"Difficulté :",
+		6, 0, NULL,
+		{ { 0, L"personnalisé                    (0 - n)",    NULL, playMenuProc },
+		  { 0, L"facile                          (0 - 10)",   NULL, playMenuProc },
+		  { 0, L"moyen                           (0 - 100)",  NULL, playMenuProc },
+		  { 0, L"difficile                       (0 - 1000)", NULL, playMenuProc },
+		  { 5, L"de plus en plus diabolique !  (0 - 10^n)",   NULL, playMenuProc },
+		  { 0, L"Retour au choix du mode de jeu.",            NULL, NULL } }
 	};
 	
 	const Menu modeMenu = {
 		L"Modes de jeu :",
-		4, 0,
-		{ { 0, L"IA         (programme / programme)", NULL,      NULL },
-		  { 0, L"solo       (programme / joueur)",    NULL,      NULL },
-		  { 0, L"2 joueurs     (joueur / joueur)",    NULL,      NULL },
-		  { 0, L"Retour au menu principal.",          NULL/*&mainMenu*/, NULL } }
+		4, 0, &gcontext.mode,
+		{ { 0, L"IA         (programme / programme)", &diffMenu, NULL },
+		  { 0, L"solo       (programme / joueur)",    &diffMenu, NULL },
+		  { 0, L"2 joueurs     (joueur / joueur)",    &diffMenu, NULL },
+		  { 0, L"Retour au menu principal.",          NULL,      NULL } }
 	};
 	
-	const Menu diffMenu = {
-		L"Difficulté :",
-		5, 0,
-		{ { 0, L"personnalisé                    (0 - n)",    NULL, NULL      },
-		  { 0, L"facile                          (0 - 10)",   NULL, NULL      },
-		  { 0, L"moyen                           (0 - 100)",  NULL, NULL },
-		  { 0, L"difficile                       (0 - 1000)", NULL, NULL },
-		  { 5, L"de plus en plus diabolique !  (0 - 10^n)",   NULL, NULL } }
+	const Menu mainMenu = {
+		L"Menu principal :",
+		4, 1, NULL,
+		{ { 0, L"Jouer.",          &modeMenu, NULL },
+		  { 0, L"Statistiques.",   NULL,      NULL },
+		  { 0, L"Joueurs.",        NULL,      NULL },
+		  { 0, L"Quitter le jeu.", NULL,      NULL } }
 	};
 	
 	/* Initialisations absconses. */
@@ -160,40 +181,16 @@ int  main
 	SDL_EnableUNICODE(1);
 	
 	/* Chargement du fichier de données. */
-	datas = loadDatas();
+	gcontext.datas = loadDatas();
 	
-	while(027) {
-		/* Menu principal. */
-		mode = menu(&mainMenu);
-		if(mode == 4)
-			break;
-		
-		while(0x6142) {
-			/* Choix du mode de jeu. */
-			mode = menu(&modeMenu);
-			if(mode == 3)
-				break;
-			
-			/* Choix de la difficulté. */
-			diff = menu(&diffMenu);
-			
-			/* Jeu. */
-			PlayerDatas* playerG = ( mode != 0 )
-			  ? datas->players + datas->player1
-			  : NULL;
-			PlayerDatas* playerA = ( mode == 2 )
-			  ? datas->players + datas->player2
-			  : NULL;
-			
-			play(mode, diff, playerG, playerA);
-		}
-	}
+	/* Menu principal. */
+	menu(&mainMenu);			
 	
 	/* Fin du programme. */
 	//setConsoleOutputEncoding(0);
 	TTF_Quit();
 	SDL_Quit();
-	unloadDatas(datas);
+	unloadDatas(gcontext.datas);
 	
 	return EXIT_SUCCESS;
 }

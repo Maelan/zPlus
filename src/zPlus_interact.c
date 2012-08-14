@@ -40,38 +40,6 @@ void  clearConsole
 
 
 
-/*int  getNum
-  (unsigned* nump)
-{
-	int r;
-	wint_t c;
-	
-	r = wscanf(L"%u", nump);
-	/* On débarrasse la table. :) * /
-	while((c = fgetwc(stdin)) != L'\n'  &&  c != WEOF);
-	
-	return r == 1;
-}
-
-
-
-unsigned  askNum
-  (const wchar_t* msg)
-{
-	unsigned num;
-	int r;
-	
-	do {
-		if(msg)
-			fputws(msg, stdout);
-		r = getNum(&num);
-	} while(!r);
-	
-	return num;
-}*/
-
-
-
 unsigned  askNum
   (const wchar_t* msg)
 {
@@ -109,32 +77,40 @@ unsigned  choose
 
 
 
-unsigned  menu
+void  menu
   (const Menu* m)
 {
-	unsigned choice, max;
-	
-	
-	fputws(m->title, stdout);
-	putwchar(L'\n');
-	
-	max = m->start;
-	for(unsigned i = 0;  i < m->n;  i++) {
-		wprintf(L"  %u%.0i. %ls\n",
-		  max,
-		  (m->entries[i].extent) ? -(max + m->entries[i].extent) : 0,
-		  m->entries[i].label
-		 );
-		max += 1 + m->entries[i].extent;
+	while(0xfeel) {
+		unsigned choice, max;
+		
+		fputws(m->title, stdout);
+		putwchar(L'\n');
+		
+		max = m->start;
+		for(unsigned i = 0;  i < m->n;  i++) {
+			wprintf(L"  %u%.0i. %ls\n",
+			  max,
+			  (m->entries[i].extent) ? -(max + m->entries[i].extent) : 0,
+			  m->entries[i].label
+			 );
+			max += 1 + m->entries[i].extent;
+		}
+		
+		choice = choose(m->start, max-1, NULL);
+		putwchar(L'\n');
+		
+		if(m->pchoice)
+			*m->pchoice = choice;
+		
+		unsigned i = 0;
+		for(unsigned sum = m->start;  sum < choice;  sum += 1 + m->entries[i].extent)
+			i++;
+		
+		if(m->entries[i].sub)
+			menu(m->entries[i].sub);
+		else if(m->entries[i].proc)
+			m->entries[i].proc(choice);
+		else
+			break;
 	}
-	
-	choice = choose(m->start, max-1, NULL);
-	putwchar(L'\n');
-	
-	if(m->entries[choice].sub)
-		menu(m->entries[choice].sub);
-	else if(m->entries[choice].proc)
-		m->entries[choice].proc(choice);
-	
-	return choice;
 }
