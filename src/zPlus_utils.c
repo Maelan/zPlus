@@ -17,6 +17,24 @@ unsigned  _log2
 
 
 
+unsigned  _log10
+  (unsigned n)
+{
+	unsigned r;
+	
+	for(r = UINT_MAX;  n;  n /= 10)
+		r++;
+	
+	return r;
+	
+	/*for(r = 0;  n >= 10;  n /= 10)
+		r++;
+	
+	return (n == 1) ? r : UINT_MAX;*/
+}
+
+
+
 unsigned _pow
   (unsigned b, unsigned p)
 {
@@ -30,19 +48,6 @@ unsigned _pow
 	
 	return acc;
 }
-
-
-
-/*unsigned  _log10
-  (unsigned n)
-{
-	unsigned r;
-	
-	for(r = 0;  n >= 10;  n /= 10)
-		r++;
-	
-	return (n == 1) ? r : UINT_MAX;
-}*/
 
 
 

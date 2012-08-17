@@ -4,7 +4,7 @@
 
 
 
-Datas* createDatas(Datas* old, /*FILE* file,*/ int newPlayers) {
+Datas* createDatas(Datas* old, int newPlayers) {
 	Datas* datas;
 	
 	unsigned nPlayers = newPlayers + ((old) ? old->nPlayers : 0);
@@ -25,7 +25,6 @@ Datas* createDatas(Datas* old, /*FILE* file,*/ int newPlayers) {
 	if(nPlayers == newPlayers  ||  datas->player2 >= nPlayers)
 		datas->player2 = 0;
 	datas->nPlayers = nPlayers;
-	//datas->file = file;
 	
 	return datas;
 }
@@ -40,16 +39,7 @@ Datas* loadDatas(void) {
 	unsigned nPlayers;
 	
 	/* Ouverture ou création du fichier binaire en lecture et écriture. */
-	file = fopen(DATAS_PATH, "rb"/*"r+b"*/);
-	/*if(!file  &&  errno == ENOENT)
-		file = fopen(DATAS_PATH, "w+b");
-	if(!file) {
-		fputws(L"Erreur à l’ouverture du fichier de données.\n", stderr);
-		perror(DATAS_PATH);
-		exit(EXIT_FAILURE);
-	}*/
-	/*fileSz = ftell(file);
-	rewind(file);*/
+	file = fopen(DATAS_PATH, "rb");
 	if(!file  &&  errno != ENOENT) {
 		fputws(L"Erreur à l’ouverture en lecture du fichier ", stderr);
 		perror(DATAS_PATH);
@@ -58,9 +48,8 @@ Datas* loadDatas(void) {
 	
 	/* Écriture du fichier par défaut si nécessaire. */
 	if(!file/*  ||  fileSz < SIZEOF_DATAS_HEADER + sizeof(*datas->players)*/) {
-		datas = createDatas(NULL, /*file,*/ 1);
+		datas = createDatas(NULL, 1);
 		wcscpy(datas->players[0].name, DEFAULT_PLAYER_NAME);
-		//writeDatas(datas);
 	}
 	
 	else {
@@ -68,7 +57,7 @@ Datas* loadDatas(void) {
 		fread(&nPlayers, sizeof(nPlayers), 1, file);
 		
 		/* Allocation de mémoire. */
-		datas = createDatas(NULL, /*file,*/ nPlayers);
+		datas = createDatas(NULL, nPlayers);
 		
 		/* Lecture complète. */
 		fread(     &datas->player1, sizeof(datas->player1),  1,        file );
@@ -92,7 +81,6 @@ Datas* loadDatas(void) {
 
 
 void writeDatas(const Datas* datas) {
-	//rewind(datas->file);
 	FILE* file = fopen(DATAS_PATH, "wb");
 	if(!file) {
 		fputws(L"Erreur à l’ouverture du fichier de données ", stderr);
@@ -100,11 +88,10 @@ void writeDatas(const Datas* datas) {
 		fputws(L"Les données de cette exécution seront perdues.\n", stderr);
 		return;
 	}
-	fwrite( &datas->nPlayers, sizeof(datas->nPlayers), 1,   /*datas->*/file );
-	fwrite( &datas->player1,  sizeof(datas->player1),  1,   /*datas->*/file );
-	fwrite( &datas->player2,  sizeof(datas->player2),  1,   /*datas->*/file );
-	fwrite( datas->players,   sizeof(*datas->players), datas->nPlayers,
-	                                                        /*datas->*/file );
+	fwrite( &datas->nPlayers, sizeof(datas->nPlayers), 1,               file );
+	fwrite( &datas->player1,  sizeof(datas->player1),  1,               file );
+	fwrite( &datas->player2,  sizeof(datas->player2),  1,               file );
+	fwrite( datas->players,   sizeof(*datas->players), datas->nPlayers, file );
 	fclose(file);
 }
 
@@ -112,6 +99,112 @@ void writeDatas(const Datas* datas) {
 
 void unloadDatas(Datas* datas) {
 	writeDatas(datas);
-	//fclose(datas->file);
 	free(datas);
+}
+
+
+
+
+
+void  addPlayer
+  (Datas** pdatas, const wchar_t* name)
+{
+	if((*pdatas)->nPlayers == MAX_PLAYERS) {
+		fputws(
+		  L"Impossible de créer un nouveau profil,"
+		  L" le nombre maximal est déjà atteint.\n",
+		  stderr);
+		return;
+	}
+	
+	*pdatas = createDatas(*pdatas, +1);
+	wcscpy((*pdatas)->players[(*pdatas)->nPlayers-1].name, name);
+}
+
+
+
+void  deletePlayer
+  (Datas** pdatas, unsigned playerID)
+{
+	if(!playerID  || playerID >= (*pdatas)->nPlayers)
+		return;
+	
+	memmove(
+	  (*pdatas)->players + playerID,
+	  (*pdatas)->players + playerID + 1,
+	  ( (*pdatas)->nPlayers - playerID - 1 ) * sizeof(*(*pdatas)->players)
+	 );
+	
+	if(playerID == (*pdatas)->player1)
+		(*pdatas)->player1 = 0;
+	else if(playerID < (*pdatas)->player1)
+		(*pdatas)->player1 --;
+	
+	if(playerID == (*pdatas)->player2)
+		(*pdatas)->player2 = 0;
+	else if(playerID < (*pdatas)->player2)
+		(*pdatas)->player2 --;
+	
+	*pdatas = createDatas(*pdatas, -1);
+}
+
+
+
+
+
+void  updateLevelStats
+  (PlayerDatas* player, unsigned lvl, unsigned tries, Uint32 chrono)
+{
+	player->levels[lvl].played       ++;
+	player->levels[lvl].total.tries  += tries;
+	player->levels[lvl].total.chrono += chrono;
+	if( tries < player->levels[lvl].min.tries
+	 || !player->levels[lvl].min.tries )
+		player->levels[lvl].min.tries = tries;
+	if( chrono < player->levels[lvl].min.chrono
+	 || !player->levels[lvl].min.chrono )
+		player->levels[lvl].min.chrono = chrono;
+}
+
+
+
+void  printLevelStats
+  (PlayerDatas* player, unsigned lvl)
+{
+	unsigned optimaxTries = _log2(_pow(10, lvl)) + 1;
+	
+	wprintf(
+	  L"[%ls] Statistiques pour le niveau %u :\n"
+	  L"    parties jouées : %u\n"
+	  L"    score moyen :    %+.2f\n"
+	  L"    meilleur score : %+i\n"
+	  L"    temps moyen :    %.2fs  (soit %.2fs par coup)\n"
+	  L"    meilleur temps : %.2fs\n\n",
+	  player->name, lvl,
+	  player->levels[lvl].played,
+	  optimaxTries
+	    - player->levels[lvl].total.tries
+	      / (double)player->levels[lvl].played,
+	  optimaxTries - player->levels[lvl].min.tries,
+	  player->levels[lvl].total.chrono / 1000.
+	    / (double)player->levels[lvl].played,
+	  player->levels[lvl].total.chrono / 1000.
+	    / (double)player->levels[lvl].total.tries,
+	 player->levels[lvl].min.chrono / 1000.
+	);
+}
+
+
+
+void  printPlayerStats
+  (PlayerDatas* player)
+{
+	wprintf( L"[%ls] Total de parties jouées : %u\n\n",
+	  player->name,
+	  player->levels[0].played
+	 );
+	
+	for(unsigned i = 1;  i < 10;  i++)
+		if(player->levels[i].played)
+			printLevelStats(player, i);
 }

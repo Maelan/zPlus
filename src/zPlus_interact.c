@@ -40,19 +40,30 @@ void  clearConsole
 
 
 
+void  clearInput
+  (FILE* in)
+{
+	wint_t c;
+	while((c = fgetwc(in)) != L'\n'  &&  c != WEOF);
+}
+
+
+
 unsigned  askNum
   (const wchar_t* msg)
 {
 	unsigned num;
 	int r;
-	wint_t c;
+	
+	if(!msg)
+		msg = L"Votre choix : ";
 	
 	do {
-		if(msg)
-			fputws(msg, stdout);
+		fputws(msg, stdout);
+		msg = L"> ";
 		r = wscanf(L"%u", &num);
 		/* On débarrasse la table. :) */
-		while((c = fgetwc(stdin)) != L'\n'  &&  c != WEOF);
+		clearInput(stdin);
 	} while(r != 1);
 	
 	return num;
@@ -65,12 +76,9 @@ unsigned  choose
 {
 	unsigned choice;
 	
-	if(!msg)
-		msg = L"Votre choix : ";
-	
 	do
 		choice = askNum(msg);
-	while(choice < min   ||  choice > max);
+	while((choice < min  ||  choice > max)  &&  choice != UINT_MAX);
 	
 	return choice;
 }
@@ -78,17 +86,25 @@ unsigned  choose
 
 
 void  menu
-  (const Menu* m)
+  (Menu* m)
 {
 	while(0xfeel) {
 		unsigned choice, max;
 		
+		/* Génération du menu. */
+		if(m->gen)
+			m->gen(m);
+		
+		putwchar(L'\n');
+		
+		/* Affichage du titre. */
 		fputws(m->title, stdout);
 		putwchar(L'\n');
 		
+		/* Affichage des entrées. */
 		max = m->start;
 		for(unsigned i = 0;  i < m->n;  i++) {
-			wprintf(L"  %u%.0i. %ls\n",
+			wprintf(L"  %2u%.i. %ls\n",
 			  max,
 			  (m->entries[i].extent) ? -(max + m->entries[i].extent) : 0,
 			  m->entries[i].label
@@ -96,16 +112,20 @@ void  menu
 			max += 1 + m->entries[i].extent;
 		}
 		
+		/* Choix de l’utilisateur. */
 		choice = choose(m->start, max-1, NULL);
-		putwchar(L'\n');
-		
+		//putwchar(L'\n');
 		if(m->pchoice)
 			*m->pchoice = choice;
+		
+		/* Mouhahahahahahaha… Hurlez ! */
+		clearConsole();
 		
 		unsigned i = 0;
 		for(unsigned sum = m->start;  sum < choice;  sum += 1 + m->entries[i].extent)
 			i++;
 		
+		/* Action associée (sous-menu, fonction, ou quitter sinon). */
 		if(m->entries[i].sub)
 			menu(m->entries[i].sub);
 		else if(m->entries[i].proc)
@@ -113,4 +133,8 @@ void  menu
 		else
 			break;
 	}
+		
+	/* Destruction du menu. */
+	if(m->des)
+		m->des(m);
 }
