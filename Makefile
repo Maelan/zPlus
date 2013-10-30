@@ -1,5 +1,5 @@
 CC=gcc
-LDFLAGS=-lSDL -lSDL_ttf 
+LDFLAGS=-lSDL -lSDL_ttf -lncurses
 # -lmingw32 => needed under Windows
 CFLAGS=-W -Wall -Wextra -pedantic -std=c99
 EXEC=zPlus
@@ -15,11 +15,3 @@ $(EXEC): $(OBJ)
 obj/%.o: src/%.c
 	@echo "====	Compilation de '$<' ($?)"
 	$(CC) -o "$@" -c "$<" $(CFLAGS)
-
-
-##### VARIABLES INTERNES #####
-# $@		cible
-# $^		dépendances
-# $<		1ère dépendance
-# $?		dépendances + récentes que la cible
-# $*		fichier sans suffixe
